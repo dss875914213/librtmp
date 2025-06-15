@@ -1,4 +1,5 @@
 #include "RtmpStream.h"
+#include <memory>
 // 平台特定头文件
 // 如果不是Windows平台
 #ifndef _WIN32
@@ -84,7 +85,7 @@ bool RtmpStream::connect()
 }
 
 // 发布FLV文件到RTMP服务器
-bool RtmpStream::publish(char* packet, uint32_t packetSize, uint32_t timestamp)
+bool RtmpStream::writePacket(char* packet, uint32_t packetSize, uint32_t timestamp)
 {
 	// 记录开始发布日志
 	RTMP_LogPrintf("Starting to publish stream...");
@@ -131,6 +132,67 @@ bool RtmpStream::publish(char* packet, uint32_t packetSize, uint32_t timestamp)
 	}
 
 	RTMP_LogPrintf("Publishing completed. Total frames sent: %u", framesSent);
+	return true;
+}
+
+bool RtmpStream::sendPacket(char* data, uint32_t dataSize, uint8_t type, uint32_t timestamp)
+{
+	// 记录开始发布日志
+	RTMP_LogPrintf("Starting to sendPacket stream...");
+
+	// 记录开始时间
+	uint32_t startTime = RTMP_GetTime();
+	// 记录上一帧时间戳
+	uint32_t lastTimestamp = 0;
+	// 记录已发送帧数
+	uint32_t framesSent = 0;
+
+	// 检查RTMP连接是否仍然有效
+	if (!RTMP_IsConnected(m_rtmp)) {
+		// 若连接丢失，记录错误日志
+		RTMP_Log(RTMP_LOGERROR, "RTMP connection lost");
+		return false;
+	}
+
+	// 尝试将数据包写入RTMP连接
+	std::unique_ptr<RTMPPacket> packet = std::make_unique<RTMPPacket>();
+	ZeroMemory(packet.get(), sizeof(RTMPPacket));
+	packet->m_hasAbsTimestamp = 0;
+	packet->m_nChannel = 0x04;
+	packet->m_nInfoField2 = m_rtmp->m_stream_id;
+	packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
+	packet->m_nTimeStamp = timestamp;
+	packet->m_packetType = type;
+	packet->m_nBodySize = dataSize;
+	RTMPPacket_Alloc(packet.get(), dataSize);
+	memcpy(packet->m_body, data, dataSize);
+
+	if (!RTMP_SendPacket(m_rtmp, packet.get(), TRUE)) {
+		// 若写入失败，记录错误日志
+		RTMP_Log(RTMP_LOGERROR, "RTMP_Write failed");
+		// 释放已分配的内存
+		return false;
+	}
+	// 增加已发送的帧数计数
+	framesSent++;
+
+	// 帧率控制逻辑
+	// 计算从开始发布到现在经过的时间
+	uint32_t elapsed = RTMP_GetTime() - startTime;
+	// 如果当前标签的时间戳大于已过去的时间，进行适当延迟
+	if (timestamp > elapsed) {
+		// 调用平台特定的睡眠函数进行延迟
+		SLEEP_MS(FRAME_DELAY_MS);
+	}
+
+	// 定期记录发布进度
+	if (framesSent % 100 == 0) {
+		// 每发送100帧，记录已发送帧数和当前时间戳
+		RTMP_LogPrintf("Sent %u frames, timestamp: %ums",
+			framesSent, timestamp);
+	}
+
+	RTMP_LogPrintf("SendPacket completed. Total frames sent: %u", framesSent);
 	return true;
 }
 

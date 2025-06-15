@@ -20,8 +20,8 @@
 #include "FlvParse.h"
 
 using namespace std;
- // 配置
- // 定义要发布的FLV文件路径
+// 配置
+// 定义要发布的FLV文件路径
 const char* FLV_FILE = "walking-dead.flv";
 // 定义RTMP服务器的URL
 const char* RTMP_URL = "rtmp://localhost/live/livestream";
@@ -53,16 +53,25 @@ int main(int argc, char* argv[]) {
 		char* packet = NULL;
 		uint32_t packetSize = 0;
 		uint32_t timestamp = 0;
+		uint8_t type = 0;
 
-		while (flvParse.readTag(&packet, &packetSize, &timestamp))
+		//while (flvParse.readTag(&packet, &packetSize, &timestamp))
+		//{
+		//	// Start publishing
+		//	if (!publisher.writePacket(packet, packetSize, timestamp)) {
+		//		RTMP_Log(RTMP_LOGERROR, "Publishing failed");
+		//		return 1;
+		//	}
+		//}
+
+		while (flvParse.readTagData(&packet, &packetSize, &type, &timestamp))
 		{
 			// Start publishing
-			if (!publisher.publish(packet, packetSize, timestamp)) {
+			if (!publisher.sendPacket(packet, packetSize, type, timestamp)) {
 				RTMP_Log(RTMP_LOGERROR, "Publishing failed");
 				return 1;
 			}
 		}
-
 	}
 	catch (const std::exception& e) {
 		RTMP_Log(RTMP_LOGERROR, "Exception: %s", e.what());

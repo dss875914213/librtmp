@@ -14,7 +14,8 @@ public:
 public:
 	bool initialize();
 	bool connect();
-	bool publish(char* packet, uint32_t packetSize, uint32_t timestamp);
+	bool writePacket(char* packet, uint32_t packetSize, uint32_t timestamp);
+	bool sendPacket(char* packet, uint32_t packetSize, uint8_t type, uint32_t timestamp);
 
 private:
 	void cleanup();
