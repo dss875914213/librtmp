@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{00fab7b7-f56b-4f21-9ddd-d5e84673e570}</ProjectGuid>
-    <RootNamespace>PushStream</RootNamespace>
+    <ProjectGuid>{00fe33cb-5b51-411c-a7ee-e848be9d1f2c}</ProjectGuid>
+    <RootNamespace>H264PushStream</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -142,15 +142,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="FlvParse.cpp" />
-    <ClCompile Include="InitializerNetworkEnv.cpp" />
+    <ClCompile Include="librtmp_send264.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="RtmpStream.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="FlvParse.h" />
-    <ClInclude Include="InitializerNetworkEnv.h" />
-    <ClInclude Include="RtmpStream.h" />
+    <ClInclude Include="librtmp_send264.h" />
+    <ClInclude Include="sps_decode.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
