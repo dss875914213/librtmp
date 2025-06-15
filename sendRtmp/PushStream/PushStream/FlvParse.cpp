@@ -78,22 +78,11 @@ bool FlvParse::readTag(char** packet, uint32_t* packetSize, uint32_t* timestamp)
 		memcpy(m_packet.data(), header, 11);
 
 		// 从文件中读取数据部分到数据包缓冲区
-		if (fread(m_packet.data() + 11, 1, dataSize, m_file) != dataSize) {
+		if (fread(m_packet.data() + 11, 1, dataSize + 4, m_file) != dataSize + 4) {
 			// 若读取失败，释放已分配的内存
 			m_packet.clear();
 			break;
 		}
-
-		// 跳过文件中的前一个标签大小字段，因为我们将自己计算并添加
-		fseek(m_file, 4, SEEK_CUR);
-
-		// 计算前一个标签的大小
-		uint32_t prevTagSize = 11 + dataSize;
-		// 将前一个标签大小以大端字节序写入数据包末尾
-		m_packet[11 + dataSize + 0] = (prevTagSize >> 24) & 0xFF;
-		m_packet[11 + dataSize + 1] = (prevTagSize >> 16) & 0xFF;
-		m_packet[11 + dataSize + 2] = (prevTagSize >> 8) & 0xFF;
-		m_packet[11 + dataSize + 3] = prevTagSize & 0xFF;
 		bRes = true;
 		break;
 	} while (1);
