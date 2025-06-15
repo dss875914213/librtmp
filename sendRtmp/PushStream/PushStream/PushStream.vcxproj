@@ -142,7 +142,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FlvParse.cpp" />
+    <ClCompile Include="InitializerNetworkEnv.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="main2.cpp" />
+    <ClCompile Include="RtmpStream.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="FlvParse.h" />
+    <ClInclude Include="InitializerNetworkEnv.h" />
+    <ClInclude Include="RtmpStream.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
