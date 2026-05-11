@@ -145,6 +145,8 @@
     <ClCompile Include="FlvParse.cpp" />
     <ClCompile Include="InitializerNetworkEnv.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="main_push_flv.cpp" />
+    <ClCompile Include="main_save_flv.cpp" />
     <ClCompile Include="RtmpStream.cpp" />
   </ItemGroup>
   <ItemGroup>

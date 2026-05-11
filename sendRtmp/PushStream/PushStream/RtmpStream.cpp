@@ -1,208 +1,291 @@
-#include "RtmpStream.h"
-#include <memory>
-// Æ½Ì¨ÌØ¶¨Í·ÎÄ¼ş
-// Èç¹û²»ÊÇWindowsÆ½Ì¨
-#ifndef _WIN32
-// ¶¨ÒåºÁÃë¼¶Ë¯Ãßº¯Êı
-#define SLEEP_MS(ms) usleep((ms)*1000)
-// Èç¹ûÊÇWindowsÆ½Ì¨
-#else
-// ¶¨ÒåºÁÃë¼¶Ë¯Ãßº¯Êı
-#define SLEEP_MS(ms) Sleep(ms)
-#endif
-// ¶¨ÒåÁ¬½Ó³¬Ê±Ê±¼ä£¬µ¥Î»ÎªÃë
-const int CONNECT_TIMEOUT = 5;          // seconds
-// ¶¨Òå»º³åÇø³ÖĞøÊ±¼ä£¬µ¥Î»ÎªÃë£¨1Ğ¡Ê±£©
-const int BUFFER_DURATION = 3600;       // seconds (1 hour)
-// ¶¨ÒåÄ¿±êÖ¡ÂÊ£¬µ¥Î»ÎªÖ¡Ã¿Ãë
-const int TARGET_FRAME_RATE = 30;       // fps
-// ¼ÆËãÃ¿Ö¡Ö®¼äµÄÑÓ³ÙÊ±¼ä£¬µ¥Î»ÎªºÁÃë
-const int FRAME_DELAY_MS = 1000 / TARGET_FRAME_RATE;
-
-// ¹¹Ôìº¯Êı£¬³õÊ¼»¯RTMP URL
-RtmpStream::RtmpStream(const char* rtmpUrl)
-	: m_rtmpUrl(rtmpUrl)
-	, m_rtmp(nullptr)
-{
-}
-
-// Îö¹¹º¯Êı£¬ÇåÀí×ÊÔ´
-RtmpStream::~RtmpStream()
-{
-	cleanup();
-}
-
-// ³õÊ¼»¯RTMPÁ¬½Ó
-bool RtmpStream::initialize()
-{
-	// ·ÖÅäRTMP¶ÔÏóÄÚ´æ
-	m_rtmp = RTMP_Alloc();
-	if (!m_rtmp) {
-		// ¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_Alloc failed");
-		return false;
-	}
-	// ³õÊ¼»¯RTMP¶ÔÏó
-	RTMP_Init(m_rtmp);
-
-	// ÉèÖÃÁ¬½Ó³¬Ê±Ê±¼ä
-	m_rtmp->Link.timeout = CONNECT_TIMEOUT;
-
-	// ÉèÖÃRTMP URL
-	if (!RTMP_SetupURL(m_rtmp, const_cast<char*>(m_rtmpUrl))) {
-		// ¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_SetupURL failed");
-		return false;
-	}
-
-	// ÆôÓÃ·¢²¼Ä£Ê½
-	RTMP_EnableWrite(m_rtmp);
-
-	// ÉèÖÃ»º³åÇø³ÖĞøÊ±¼ä
-	RTMP_SetBufferMS(m_rtmp, BUFFER_DURATION * 1000);
-
-	return true;
-}
-
-// Á¬½Óµ½RTMP·şÎñÆ÷
-bool RtmpStream::connect()
-{
-	// ½¨Á¢RTMPÁ¬½Ó
-	if (!RTMP_Connect(m_rtmp, nullptr)) {
-		// ¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_Connect failed");
-		return false;
-	}
-
-	// Á¬½Óµ½RTMPÁ÷
-	if (!RTMP_ConnectStream(m_rtmp, 0)) {
-		// ¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_ConnectStream failed");
-		return false;
-	}
-
-	return true;
-}
-
-// ·¢²¼FLVÎÄ¼şµ½RTMP·şÎñÆ÷
-bool RtmpStream::writePacket(char* packet, uint32_t packetSize, uint32_t timestamp)
-{
-	// ¼ÇÂ¼¿ªÊ¼·¢²¼ÈÕÖ¾
-	RTMP_LogPrintf("Starting to publish stream...");
-
-	// ¼ÇÂ¼¿ªÊ¼Ê±¼ä
-	uint32_t startTime = RTMP_GetTime();
-	// ¼ÇÂ¼ÉÏÒ»Ö¡Ê±¼ä´Á
-	uint32_t lastTimestamp = 0;
-	// ¼ÇÂ¼ÒÑ·¢ËÍÖ¡Êı
-	uint32_t framesSent = 0;
-
-	// ¼ì²éRTMPÁ¬½ÓÊÇ·ñÈÔÈ»ÓĞĞ§
-	if (!RTMP_IsConnected(m_rtmp)) {
-		// ÈôÁ¬½Ó¶ªÊ§£¬¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP connection lost");
-		return false;
-	}
-
-	// ³¢ÊÔ½«Êı¾İ°üĞ´ÈëRTMPÁ¬½Ó
-	if (!RTMP_Write(m_rtmp, (char*)packet, packetSize)) {
-		// ÈôĞ´ÈëÊ§°Ü£¬¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_Write failed");
-		// ÊÍ·ÅÒÑ·ÖÅäµÄÄÚ´æ
-		return false;
-	}
-
-	// Ôö¼ÓÒÑ·¢ËÍµÄÖ¡Êı¼ÆÊı
-	framesSent++;
-
-	// Ö¡ÂÊ¿ØÖÆÂß¼­
-	// ¼ÆËã´Ó¿ªÊ¼·¢²¼µ½ÏÖÔÚ¾­¹ıµÄÊ±¼ä
-	uint32_t elapsed = RTMP_GetTime() - startTime;
-	// Èç¹ûµ±Ç°±êÇ©µÄÊ±¼ä´Á´óÓÚÒÑ¹ıÈ¥µÄÊ±¼ä£¬½øĞĞÊÊµ±ÑÓ³Ù
-	if (timestamp > elapsed) {
-		// µ÷ÓÃÆ½Ì¨ÌØ¶¨µÄË¯Ãßº¯Êı½øĞĞÑÓ³Ù
-		SLEEP_MS(FRAME_DELAY_MS);
-	}
-
-	// ¶¨ÆÚ¼ÇÂ¼·¢²¼½ø¶È
-	if (framesSent % 100 == 0) {
-		// Ã¿·¢ËÍ100Ö¡£¬¼ÇÂ¼ÒÑ·¢ËÍÖ¡ÊıºÍµ±Ç°Ê±¼ä´Á
-		RTMP_LogPrintf("Sent %u frames, timestamp: %ums",
-			framesSent, timestamp);
-	}
-
-	RTMP_LogPrintf("Publishing completed. Total frames sent: %u", framesSent);
-	return true;
-}
-
-bool RtmpStream::sendPacket(char* data, uint32_t dataSize, uint8_t type, uint32_t timestamp)
-{
-	// ¼ÇÂ¼¿ªÊ¼·¢²¼ÈÕÖ¾
-	RTMP_LogPrintf("Starting to sendPacket stream...");
-
-	// ¼ÇÂ¼¿ªÊ¼Ê±¼ä
-	uint32_t startTime = RTMP_GetTime();
-	// ¼ÇÂ¼ÉÏÒ»Ö¡Ê±¼ä´Á
-	uint32_t lastTimestamp = 0;
-	// ¼ÇÂ¼ÒÑ·¢ËÍÖ¡Êı
-	uint32_t framesSent = 0;
-
-	// ¼ì²éRTMPÁ¬½ÓÊÇ·ñÈÔÈ»ÓĞĞ§
-	if (!RTMP_IsConnected(m_rtmp)) {
-		// ÈôÁ¬½Ó¶ªÊ§£¬¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP connection lost");
-		return false;
-	}
-
-	// ³¢ÊÔ½«Êı¾İ°üĞ´ÈëRTMPÁ¬½Ó
-	std::unique_ptr<RTMPPacket> packet = std::make_unique<RTMPPacket>();
-	ZeroMemory(packet.get(), sizeof(RTMPPacket));
-	packet->m_hasAbsTimestamp = 0;
-	packet->m_nChannel = 0x04;
-	packet->m_nInfoField2 = m_rtmp->m_stream_id;
-	packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
-	packet->m_nTimeStamp = timestamp;
-	packet->m_packetType = type;
-	packet->m_nBodySize = dataSize;
-	RTMPPacket_Alloc(packet.get(), dataSize);
-	memcpy(packet->m_body, data, dataSize);
-
-	if (!RTMP_SendPacket(m_rtmp, packet.get(), TRUE)) {
-		// ÈôĞ´ÈëÊ§°Ü£¬¼ÇÂ¼´íÎóÈÕÖ¾
-		RTMP_Log(RTMP_LOGERROR, "RTMP_Write failed");
-		// ÊÍ·ÅÒÑ·ÖÅäµÄÄÚ´æ
-		return false;
-	}
-	// Ôö¼ÓÒÑ·¢ËÍµÄÖ¡Êı¼ÆÊı
-	framesSent++;
-
-	// Ö¡ÂÊ¿ØÖÆÂß¼­
-	// ¼ÆËã´Ó¿ªÊ¼·¢²¼µ½ÏÖÔÚ¾­¹ıµÄÊ±¼ä
-	uint32_t elapsed = RTMP_GetTime() - startTime;
-	// Èç¹ûµ±Ç°±êÇ©µÄÊ±¼ä´Á´óÓÚÒÑ¹ıÈ¥µÄÊ±¼ä£¬½øĞĞÊÊµ±ÑÓ³Ù
-	if (timestamp > elapsed) {
-		// µ÷ÓÃÆ½Ì¨ÌØ¶¨µÄË¯Ãßº¯Êı½øĞĞÑÓ³Ù
-		SLEEP_MS(FRAME_DELAY_MS);
-	}
-
-	// ¶¨ÆÚ¼ÇÂ¼·¢²¼½ø¶È
-	if (framesSent % 100 == 0) {
-		// Ã¿·¢ËÍ100Ö¡£¬¼ÇÂ¼ÒÑ·¢ËÍÖ¡ÊıºÍµ±Ç°Ê±¼ä´Á
-		RTMP_LogPrintf("Sent %u frames, timestamp: %ums",
-			framesSent, timestamp);
-	}
-
-	RTMP_LogPrintf("SendPacket completed. Total frames sent: %u", framesSent);
-	return true;
-}
-
-void RtmpStream::cleanup()
-{
-	if (m_rtmp) {
-		if (RTMP_IsConnected(m_rtmp)) {
-			RTMP_Close(m_rtmp);
-		}
-		RTMP_Free(m_rtmp);
-		m_rtmp = nullptr;
-	}
-}
+//#include "RtmpStream.h"
+//#include <memory>
+//#include <cstdio>
+//// Æ½Ì¨ï¿½Ø¶ï¿½Í·ï¿½Ä¼ï¿½
+//// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½WindowsÆ½Ì¨
+//#ifndef _WIN32
+//// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¼¶Ë¯ï¿½ßºï¿½ï¿½ï¿½
+//#define SLEEP_MS(ms) usleep((ms)*1000)
+//// ï¿½ï¿½ï¿½ï¿½ï¿½WindowsÆ½Ì¨
+//#else
+//// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¼¶Ë¯ï¿½ßºï¿½ï¿½ï¿½
+//#define SLEEP_MS(ms) Sleep(ms)
+//#endif
+//
+//void PrintHexData(const char* label, unsigned char* data, int size, int max_print = 32)
+//{
+//	printf("\n========== %s ==========\n", label);
+//	printf("Size: %d bytes\n", size);
+//	printf("Data (hex): ");
+//	for (int i = 0; i < size && i < max_print; i++)
+//	{
+//		printf("%02X ", data[i]);
+//	}
+//	if (size > max_print)
+//	{
+//		printf("... (truncated)");
+//	}
+//	printf("\n");
+//}
+//// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½Ê±Ê±ï¿½ä£¬ï¿½ï¿½Î»Îªï¿½ï¿½
+//const int CONNECT_TIMEOUT = 5;          // seconds
+//// ï¿½ï¿½ï¿½å»ºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ä£¬ï¿½ï¿½Î»Îªï¿½ë£¨1Ğ¡Ê±ï¿½ï¿½
+//const int BUFFER_DURATION = 3600;       // seconds (1 hour)
+//// ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½Ö¡ï¿½Ê£ï¿½ï¿½ï¿½Î»ÎªÖ¡Ã¿ï¿½ï¿½
+//const int TARGET_FRAME_RATE = 30;       // fps
+//// ï¿½ï¿½ï¿½ï¿½Ã¿Ö¡Ö®ï¿½ï¿½ï¿½ï¿½Ó³ï¿½Ê±ï¿½ä£¬ï¿½ï¿½Î»Îªï¿½ï¿½ï¿½ï¿½
+//const int FRAME_DELAY_MS = 1000 / TARGET_FRAME_RATE;
+//
+//// ï¿½ï¿½ï¿½ìº¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½RTMP URL
+//RtmpStream::RtmpStream(const char* rtmpUrl)
+//	: m_rtmpUrl(rtmpUrl)
+//	, m_rtmp(nullptr)
+//{
+//}
+//
+//// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´
+//RtmpStream::~RtmpStream()
+//{
+//	cleanup();
+//}
+//
+//// ï¿½ï¿½Ê¼ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½
+//bool RtmpStream::initialize()
+//{
+//	// ï¿½ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½
+//	m_rtmp = RTMP_Alloc();
+//	if (!m_rtmp) {
+//		// ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_Alloc failed");
+//		return false;
+//	}
+//	// ï¿½ï¿½Ê¼ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½
+//	RTMP_Init(m_rtmp);
+//
+//	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½Ê±Ê±ï¿½ï¿½
+//	m_rtmp->Link.timeout = CONNECT_TIMEOUT;
+//
+//	// ï¿½ï¿½ï¿½ï¿½RTMP URL
+//	if (!RTMP_SetupURL(m_rtmp, const_cast<char*>(m_rtmpUrl))) {
+//		// ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_SetupURL failed");
+//		return false;
+//	}
+//
+//	// ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½Ä£Ê½
+//	RTMP_EnableWrite(m_rtmp);
+//
+//	// ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
+//	RTMP_SetBufferMS(m_rtmp, BUFFER_DURATION * 1000);
+//
+//	return true;
+//}
+//
+//// ï¿½ï¿½ï¿½Óµï¿½RTMPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//bool RtmpStream::connect()
+//{
+//	// ï¿½ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½
+//	if (!RTMP_Connect(m_rtmp, nullptr)) {
+//		// ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_Connect failed");
+//		return false;
+//	}
+//
+//	// ï¿½ï¿½ï¿½Óµï¿½RTMPï¿½ï¿½
+//	if (!RTMP_ConnectStream(m_rtmp, 0)) {
+//		// ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_ConnectStream failed");
+//		return false;
+//	}
+//
+//	return true;
+//}
+//
+//// ï¿½ï¿½ï¿½ï¿½FLVï¿½Ä¼ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//bool RtmpStream::writePacket(char* packet, uint32_t packetSize, uint32_t timestamp)
+//{
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//	RTMP_LogPrintf("Starting to publish stream...");
+//
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ê¼Ê±ï¿½ï¿½
+//	uint32_t startTime = RTMP_GetTime();
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ò»Ö¡Ê±ï¿½ï¿½ï¿½
+//	uint32_t lastTimestamp = 0;
+//	// ï¿½ï¿½Â¼ï¿½Ñ·ï¿½ï¿½ï¿½Ö¡ï¿½ï¿½
+//	uint32_t framesSent = 0;
+//
+//	// ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½È»ï¿½ï¿½Ğ§
+//	if (!RTMP_IsConnected(m_rtmp)) {
+//		// ï¿½ï¿½ï¿½ï¿½ï¿½Ó¶ï¿½Ê§ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP connection lost");
+//		return false;
+//	}
+//
+//	// ï¿½ï¿½ï¿½Ô½ï¿½ï¿½ï¿½ï¿½İ°ï¿½Ğ´ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½
+//	if (!RTMP_Write(m_rtmp, (char*)packet, packetSize)) {
+//		// ï¿½ï¿½Ğ´ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_Write failed");
+//		// ï¿½Í·ï¿½ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½
+//		return false;
+//	}
+//
+//	// ï¿½ï¿½ï¿½ï¿½ï¿½Ñ·ï¿½ï¿½Íµï¿½Ö¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	framesSent++;
+//
+//	// Ö¡ï¿½Ê¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½
+//	// ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¾ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
+//	uint32_t elapsed = RTMP_GetTime() - startTime;
+//	// ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½Ç©ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¹ï¿½È¥ï¿½ï¿½Ê±ï¿½ä£¬ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½Ó³ï¿½
+//	if (timestamp > elapsed) {
+//		// ï¿½ï¿½ï¿½ï¿½Æ½Ì¨ï¿½Ø¶ï¿½ï¿½ï¿½Ë¯ï¿½ßºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
+//		SLEEP_MS(FRAME_DELAY_MS);
+//	}
+//
+//	// ï¿½ï¿½ï¿½Ú¼ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	if (framesSent % 100 == 0) {
+//		// Ã¿ï¿½ï¿½ï¿½ï¿½100Ö¡ï¿½ï¿½ï¿½ï¿½Â¼ï¿½Ñ·ï¿½ï¿½ï¿½Ö¡ï¿½ï¿½ï¿½Íµï¿½Ç°Ê±ï¿½ï¿½ï¿½
+//		RTMP_LogPrintf("Sent %u frames, timestamp: %ums",
+//			framesSent, timestamp);
+//	}
+//
+//	RTMP_LogPrintf("Publishing completed. Total frames sent: %u", framesSent);
+//	return true;
+//}
+//
+//bool RtmpStream::sendPacket(char* data, uint32_t dataSize, uint8_t type, uint32_t timestamp)
+//{
+//	static int video_packet_count = 0;
+//	static int audio_packet_count = 0;
+//
+//	// åªå¤„ç†è§†é¢‘åŒ…ï¼Œè·³è¿‡éŸ³é¢‘åŒ…
+//	if (type == RTMP_PACKET_TYPE_VIDEO) {
+//		char label[64];
+//		sprintf(label, "Video Packet #%d, timestamp: %ums", ++video_packet_count, timestamp);
+//		PrintHexData(label, (unsigned char*)data, dataSize, 48);
+//
+//		// è§£æè§†é¢‘æ•°æ®ï¼Œæå–å’Œæ‰“å° SPS/PPS
+//		if (dataSize >= 5) {
+//			unsigned char* ptr = (unsigned char*)data;
+//			// ç¬¬2å­—èŠ‚æ˜¯ AVC åŒ…ç±»å‹: 0=åºåˆ—å¤´(å«SPS/PPS), 1=NALU, 2=åºåˆ—ç»“æŸ
+//			unsigned char avcPacketType = ptr[1];
+//			
+//			if (avcPacketType == 0) {
+//				// åºåˆ—å¤´ï¼ŒåŒ…å« SPS å’Œ PPS
+//				printf("\n========== Found AVC Sequence Header (SPS/PPS) ==========\n");
+//				
+//				// AVCDecoderConfigurationRecord ç»“æ„
+//				if (dataSize >= 10) {
+//					int idx = 5; // è·³è¿‡å‰é¢5å­—èŠ‚
+//					
+//					// è·³è¿‡ configurationVersion(1) + AVCProfileIndication(1) + profile_compatibility(1) + AVCLevelIndication(1) + lengthSizeMinusOne(1)
+//					idx += 5;
+//					
+//					// SPS count
+//					if (idx < dataSize) {
+//						unsigned char numSps = ptr[idx++] & 0x1F;
+//						for (int i = 0; i < numSps && idx + 2 < dataSize; i++) {
+//							// SPS length
+//							unsigned short spsLen = (ptr[idx] << 8) | ptr[idx + 1];
+//							idx += 2;
+//							if (idx + spsLen <= dataSize) {
+//								char spsLabel[32];
+//								sprintf(spsLabel, "SPS #%d", i + 1);
+//								PrintHexData(spsLabel, &ptr[idx], spsLen);
+//								idx += spsLen;
+//							}
+//						}
+//					}
+//					
+//					// PPS count
+//					if (idx < dataSize) {
+//						unsigned char numPps = ptr[idx++];
+//						for (int i = 0; i < numPps && idx + 2 < dataSize; i++) {
+//							// PPS length
+//							unsigned short ppsLen = (ptr[idx] << 8) | ptr[idx + 1];
+//							idx += 2;
+//							if (idx + ppsLen <= dataSize) {
+//								char ppsLabel[32];
+//								sprintf(ppsLabel, "PPS #%d", i + 1);
+//								PrintHexData(ppsLabel, &ptr[idx], ppsLen);
+//								idx += ppsLen;
+//							}
+//						}
+//					}
+//				}
+//			}
+//		}
+//	} else if (type == RTMP_PACKET_TYPE_AUDIO) {
+//		audio_packet_count++;
+//		RTMP_LogPrintf("Skipping audio packet #%d\n", audio_packet_count);
+//		return true;
+//	}
+//
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//	RTMP_LogPrintf("Starting to sendPacket stream...");
+//
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ê¼Ê±ï¿½ï¿½
+//	uint32_t startTime = RTMP_GetTime();
+//	// ï¿½ï¿½Â¼ï¿½ï¿½Ò»Ö¡Ê±ï¿½ï¿½ï¿½
+//	uint32_t lastTimestamp = 0;
+//	// ï¿½ï¿½Â¼ï¿½Ñ·ï¿½ï¿½ï¿½Ö¡ï¿½ï¿½
+//	static uint32_t framesSent = 0;
+//
+//	// ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½È»ï¿½ï¿½Ğ§
+//	if (!RTMP_IsConnected(m_rtmp)) {
+//		// ï¿½ï¿½ï¿½ï¿½ï¿½Ó¶ï¿½Ê§ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP connection lost");
+//		return false;
+//	}
+//
+//	// ï¿½ï¿½ï¿½Ô½ï¿½ï¿½ï¿½ï¿½İ°ï¿½Ğ´ï¿½ï¿½RTMPï¿½ï¿½ï¿½ï¿½
+//	std::unique_ptr<RTMPPacket> packet = std::make_unique<RTMPPacket>();
+//	ZeroMemory(packet.get(), sizeof(RTMPPacket));
+//	packet->m_hasAbsTimestamp = 0;
+//	packet->m_nChannel = 0x04;
+//	packet->m_nInfoField2 = m_rtmp->m_stream_id;
+//	packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
+//	packet->m_nTimeStamp = timestamp;
+//	packet->m_packetType = type;
+//	packet->m_nBodySize = dataSize;
+//	RTMPPacket_Alloc(packet.get(), dataSize);
+//	memcpy(packet->m_body, data, dataSize);
+//
+//	if (!RTMP_SendPacket(m_rtmp, packet.get(), TRUE)) {
+//		// ï¿½ï¿½Ğ´ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¾
+//		RTMP_Log(RTMP_LOGERROR, "RTMP_Write failed");
+//		// ï¿½Í·ï¿½ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½
+//		return false;
+//	}
+//	// ï¿½ï¿½ï¿½ï¿½ï¿½Ñ·ï¿½ï¿½Íµï¿½Ö¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	framesSent++;
+//
+//	// Ö¡ï¿½Ê¿ï¿½ï¿½ï¿½ï¿½ß¼ï¿½
+//	// ï¿½ï¿½ï¿½ï¿½Ó¿ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¾ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½
+//	uint32_t elapsed = RTMP_GetTime() - startTime;
+//	// ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½Ç©ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¹ï¿½È¥ï¿½ï¿½Ê±ï¿½ä£¬ï¿½ï¿½ï¿½ï¿½ï¿½Êµï¿½ï¿½Ó³ï¿½
+//	if (timestamp > elapsed) {
+//		// ï¿½ï¿½ï¿½ï¿½Æ½Ì¨ï¿½Ø¶ï¿½ï¿½ï¿½Ë¯ï¿½ßºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó³ï¿½
+//		SLEEP_MS(FRAME_DELAY_MS);
+//	}
+//
+//	// ï¿½ï¿½ï¿½Ú¼ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//	if (framesSent % 100 == 0) {
+//		// Ã¿ï¿½ï¿½ï¿½ï¿½100Ö¡ï¿½ï¿½ï¿½ï¿½Â¼ï¿½Ñ·ï¿½ï¿½ï¿½Ö¡ï¿½ï¿½ï¿½Íµï¿½Ç°Ê±ï¿½ï¿½ï¿½
+//		RTMP_LogPrintf("Sent %u frames, timestamp: %ums",
+//			framesSent, timestamp);
+//	}
+//
+//	RTMP_LogPrintf("SendPacket completed. Total frames sent: %u", framesSent);
+//	return true;
+//}
+//
+//void RtmpStream::cleanup()
+//{
+//	if (m_rtmp) {
+//		if (RTMP_IsConnected(m_rtmp)) {
+//			RTMP_Close(m_rtmp);
+//		}
+//		RTMP_Free(m_rtmp);
+//		m_rtmp = nullptr;
+//	}
+//}

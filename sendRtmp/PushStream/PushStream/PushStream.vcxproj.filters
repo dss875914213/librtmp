@@ -27,6 +27,12 @@
     <ClCompile Include="FlvParse.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="main_push_flv.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="main_save_flv.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="RtmpStream.h">

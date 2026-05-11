@@ -1,14 +1,14 @@
 /**
  * Simplest Librtmp Send 264
  *
- * À×Ïöæè£¬ÕÅêÍ
+ * ï¿½ï¿½ï¿½ï¿½ï¿½è£¬ï¿½ï¿½ï¿½ï¿½
  * leixiaohua1020@126.com
  * zhanghuicuc@gmail.com
- * ÖÐ¹ú´«Ã½´óÑ§/Êý×ÖµçÊÓ¼¼Êõ
+ * ï¿½Ð¹ï¿½ï¿½ï¿½Ã½ï¿½ï¿½Ñ§/ï¿½ï¿½ï¿½Öµï¿½ï¿½Ó¼ï¿½ï¿½ï¿½
  * Communication University of China / Digital TV Technology
  * http://blog.csdn.net/leixiaohua1020
  *
- * ±¾³ÌÐòÓÃÓÚ½«ÄÚ´æÖÐµÄH.264Êý¾ÝÍÆËÍÖÁRTMPÁ÷Ã½Ìå·þÎñÆ÷¡£
+ * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½ï¿½ï¿½Ú´ï¿½ï¿½Ðµï¿½H.264ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½RTMPï¿½ï¿½Ã½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  *
  */
 
@@ -20,24 +20,40 @@
 #include "amf.h"  
 #include "sps_decode.h"
 
+void PrintHexData(const char* label, unsigned char* data, int size, int max_print = 32)
+{
+	printf("\n========== %s ==========\n", label);
+	printf("Size: %d bytes\n", size);
+	printf("Data (hex): ");
+	for (int i = 0; i < size && i < max_print; i++)
+	{
+		printf("%02X ", data[i]);
+	}
+	if (size > max_print)
+	{
+		printf("... (truncated)");
+	}
+	printf("\n");
+}
+
 #ifdef WIN32     
 #include <windows.h>  
 #pragma comment(lib,"WS2_32.lib")   
 #pragma comment(lib,"winmm.lib")  
 #endif 
 
- //¶¨Òå°üÍ·³¤¶È£¬RTMP_MAX_HEADER_SIZE=18
+ //ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½È£ï¿½RTMP_MAX_HEADER_SIZE=18
 #define RTMP_HEAD_SIZE   (sizeof(RTMPPacket)+RTMP_MAX_HEADER_SIZE)
-//´æ´¢Nalµ¥ÔªÊý¾ÝµÄbuffer´óÐ¡
+//ï¿½æ´¢Nalï¿½ï¿½Ôªï¿½ï¿½ï¿½Ýµï¿½bufferï¿½ï¿½Ð¡
 #define BUFFER_SIZE 32768
-//ËÑÑ°Nalµ¥ÔªÊ±µÄÒ»Ð©±êÖ¾
+//ï¿½ï¿½Ñ°Nalï¿½ï¿½ÔªÊ±ï¿½ï¿½Ò»Ð©ï¿½ï¿½Ö¾
 #define GOT_A_NAL_CROSS_BUFFER BUFFER_SIZE+1
 #define GOT_A_NAL_INCLUDE_A_BUFFER BUFFER_SIZE+2
 #define NO_MORE_BUFFER_TO_READ BUFFER_SIZE+3
 
 /**
  * _NaluUnit
- * ÄÚ²¿½á¹¹Ìå¡£¸Ã½á¹¹ÌåÖ÷ÒªÓÃÓÚ´æ´¢ºÍ´«µÝNalµ¥ÔªµÄÀàÐÍ¡¢´óÐ¡ºÍÊý¾Ý
+ * ï¿½Ú²ï¿½ï¿½á¹¹ï¿½å¡£ï¿½Ã½á¹¹ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½Ú´æ´¢ï¿½Í´ï¿½ï¿½ï¿½Nalï¿½ï¿½Ôªï¿½ï¿½ï¿½ï¿½ï¿½Í¡ï¿½ï¿½ï¿½Ð¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 typedef struct _NaluUnit
 {
@@ -48,7 +64,7 @@ typedef struct _NaluUnit
 
 /**
  * _RTMPMetadata
- * ÄÚ²¿½á¹¹Ìå¡£¸Ã½á¹¹ÌåÖ÷ÒªÓÃÓÚ´æ´¢ºÍ´«µÝÔªÊý¾ÝÐÅÏ¢
+ * ï¿½Ú²ï¿½ï¿½á¹¹ï¿½å¡£ï¿½Ã½á¹¹ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½Ú´æ´¢ï¿½Í´ï¿½ï¿½ï¿½Ôªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
  */
 typedef struct _RTMPMetadata
 {
@@ -68,9 +84,9 @@ enum
 };
 
 /**
- * ³õÊ¼»¯winsock
+ * ï¿½ï¿½Ê¼ï¿½ï¿½winsock
  *
- * @³É¹¦Ôò·µ»Ø1 , Ê§°ÜÔò·µ»ØÏàÓ¦´íÎó´úÂë
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 int InitSockets()
 {
@@ -85,9 +101,9 @@ int InitSockets()
 }
 
 /**
- * ÊÍ·Åwinsock
+ * ï¿½Í·ï¿½winsock
  *
- * @³É¹¦Ôò·µ»Ø0 , Ê§°ÜÔò·µ»ØÏàÓ¦´íÎó´úÂë
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½0 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 inline void CleanupSockets()
 {
@@ -96,7 +112,7 @@ inline void CleanupSockets()
 #endif     
 }
 
-//ÍøÂç×Ö½ÚÐò×ª»»
+//ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½×ªï¿½ï¿½
 char* put_byte(char* output, uint8_t nVal)
 {
 	output[0] = nVal;
@@ -168,11 +184,11 @@ unsigned char* m_pFileBuf_tmp;
 unsigned char* m_pFileBuf_tmp_old;	//used for realloc
 
 /**
- * ³õÊ¼»¯²¢Á¬½Óµ½·þÎñÆ÷
+ * ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Óµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  *
- * @param url ·þÎñÆ÷ÉÏ¶ÔÓ¦webappµÄµØÖ·
+ * @param url ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¶ï¿½Ó¦webappï¿½Äµï¿½Ö·
  *
- * @³É¹¦Ôò·µ»Ø1 , Ê§°ÜÔò·µ»Ø0
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int RTMP264_Connect(const char* url)
 {
@@ -184,22 +200,22 @@ int RTMP264_Connect(const char* url)
 
 	m_pRtmp = RTMP_Alloc();
 	RTMP_Init(m_pRtmp);
-	/*ÉèÖÃURL*/
+	/*ï¿½ï¿½ï¿½ï¿½URL*/
 	if (RTMP_SetupURL(m_pRtmp, (char*)url) == FALSE)
 	{
 		RTMP_Free(m_pRtmp);
 		return false;
 	}
-	/*ÉèÖÃ¿ÉÐ´,¼´·¢²¼Á÷,Õâ¸öº¯Êý±ØÐëÔÚÁ¬½ÓÇ°Ê¹ÓÃ,·ñÔòÎÞÐ§*/
+	/*ï¿½ï¿½ï¿½Ã¿ï¿½Ð´,ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½,ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°Ê¹ï¿½ï¿½,ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§*/
 	RTMP_EnableWrite(m_pRtmp);
-	/*Á¬½Ó·þÎñÆ÷*/
+	/*ï¿½ï¿½ï¿½Ó·ï¿½ï¿½ï¿½ï¿½ï¿½*/
 	if (RTMP_Connect(m_pRtmp, NULL) == FALSE)
 	{
 		RTMP_Free(m_pRtmp);
 		return false;
 	}
 
-	/*Á¬½ÓÁ÷*/
+	/*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½*/
 	if (RTMP_ConnectStream(m_pRtmp, 0) == FALSE)
 	{
 		RTMP_Close(m_pRtmp);
@@ -211,7 +227,7 @@ int RTMP264_Connect(const char* url)
 
 
 /**
- * ¶Ï¿ªÁ¬½Ó£¬ÊÍ·ÅÏà¹ØµÄ×ÊÔ´¡£
+ * ï¿½Ï¿ï¿½ï¿½ï¿½ï¿½Ó£ï¿½ï¿½Í·ï¿½ï¿½ï¿½Øµï¿½ï¿½ï¿½Ô´ï¿½ï¿½
  *
  */
 void RTMP264_Close()
@@ -234,27 +250,27 @@ void RTMP264_Close()
 }
 
 /**
- * ·¢ËÍRTMPÊý¾Ý°ü
+ * ï¿½ï¿½ï¿½ï¿½RTMPï¿½ï¿½ï¿½Ý°ï¿½
  *
- * @param nPacketType Êý¾ÝÀàÐÍ
- * @param data ´æ´¢Êý¾ÝÄÚÈÝ
- * @param size Êý¾Ý´óÐ¡
- * @param nTimestamp µ±Ç°°üµÄÊ±¼ä´Á
+ * @param nPacketType ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ * @param data ï¿½æ´¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ * @param size ï¿½ï¿½ï¿½Ý´ï¿½Ð¡
+ * @param nTimestamp ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½
  *
- * @³É¹¦Ôò·µ»Ø 1 , Ê§°ÜÔò·µ»ØÒ»¸öÐ¡ÓÚ0µÄÊý
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½ 1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½Ò»ï¿½ï¿½Ð¡ï¿½ï¿½0ï¿½ï¿½ï¿½ï¿½
  */
 int SendPacket(unsigned int nPacketType, unsigned char* data, unsigned int size, unsigned int nTimestamp)
 {
 	RTMPPacket* packet;
-	/*·ÖÅä°üÄÚ´æºÍ³õÊ¼»¯,lenÎª°üÌå³¤¶È*/
+	/*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½Í³ï¿½Ê¼ï¿½ï¿½,lenÎªï¿½ï¿½ï¿½å³¤ï¿½ï¿½*/
 	packet = (RTMPPacket*)malloc(RTMP_HEAD_SIZE + size);
 	memset(packet, 0, RTMP_HEAD_SIZE);
-	/*°üÌåÄÚ´æ*/
+	/*ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½*/
 	packet->m_body = (char*)packet + RTMP_HEAD_SIZE;
 	packet->m_nBodySize = size;
 	memcpy(packet->m_body, data, size);
 	packet->m_hasAbsTimestamp = 0;
-	packet->m_packetType = nPacketType; /*´Ë´¦ÎªÀàÐÍÓÐÁ½ÖÖÒ»ÖÖÊÇÒôÆµ,Ò»ÖÖÊÇÊÓÆµ*/
+	packet->m_packetType = nPacketType; /*ï¿½Ë´ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµ,Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµ*/
 	packet->m_nInfoField2 = m_pRtmp->m_stream_id;
 	packet->m_nChannel = 0x04;
 
@@ -264,34 +280,34 @@ int SendPacket(unsigned int nPacketType, unsigned char* data, unsigned int size,
 		packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
 	}
 	packet->m_nTimeStamp = nTimestamp;
-	/*·¢ËÍ*/
+	/*ï¿½ï¿½ï¿½ï¿½*/
 	int nRet = 0;
 	if (RTMP_IsConnected(m_pRtmp))
 	{
-		nRet = RTMP_SendPacket(m_pRtmp, packet, TRUE); /*TRUEÎª·Å½ø·¢ËÍ¶ÓÁÐ,FALSEÊÇ²»·Å½ø·¢ËÍ¶ÓÁÐ,Ö±½Ó·¢ËÍ*/
+		nRet = RTMP_SendPacket(m_pRtmp, packet, TRUE); /*TRUEÎªï¿½Å½ï¿½ï¿½ï¿½ï¿½Í¶ï¿½ï¿½ï¿½,FALSEï¿½Ç²ï¿½ï¿½Å½ï¿½ï¿½ï¿½ï¿½Í¶ï¿½ï¿½ï¿½,Ö±ï¿½Ó·ï¿½ï¿½ï¿½*/
 	}
-	/*ÊÍ·ÅÄÚ´æ*/
+	/*ï¿½Í·ï¿½ï¿½Ú´ï¿½*/
 	free(packet);
 	return nRet;
 }
 
 /**
- * ·¢ËÍÊÓÆµµÄspsºÍppsÐÅÏ¢
+ * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµï¿½ï¿½spsï¿½ï¿½ppsï¿½ï¿½Ï¢
  *
- * @param pps ´æ´¢ÊÓÆµµÄppsÐÅÏ¢
- * @param pps_len ÊÓÆµµÄppsÐÅÏ¢³¤¶È
- * @param sps ´æ´¢ÊÓÆµµÄppsÐÅÏ¢
- * @param sps_len ÊÓÆµµÄspsÐÅÏ¢³¤¶È
+ * @param pps ï¿½æ´¢ï¿½ï¿½Æµï¿½ï¿½ppsï¿½ï¿½Ï¢
+ * @param pps_len ï¿½ï¿½Æµï¿½ï¿½ppsï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½
+ * @param sps ï¿½æ´¢ï¿½ï¿½Æµï¿½ï¿½ppsï¿½ï¿½Ï¢
+ * @param sps_len ï¿½ï¿½Æµï¿½ï¿½spsï¿½ï¿½Ï¢ï¿½ï¿½ï¿½ï¿½
  *
- * @³É¹¦Ôò·µ»Ø 1 , Ê§°ÜÔò·µ»Ø0
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½ 1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int SendVideoSpsPps(unsigned char* pps, int pps_len, unsigned char* sps, int sps_len)
 {
-	RTMPPacket* packet = NULL;//rtmp°ü½á¹¹
+	RTMPPacket* packet = NULL;//rtmpï¿½ï¿½ï¿½á¹¹
 	unsigned char* body = NULL;
 	int i;
 	packet = (RTMPPacket*)malloc(RTMP_HEAD_SIZE + 1024);
-	//RTMPPacket_Reset(packet);//ÖØÖÃpacket×´Ì¬
+	//RTMPPacket_Reset(packet);//ï¿½ï¿½ï¿½ï¿½packet×´Ì¬
 	memset(packet, 0, RTMP_HEAD_SIZE + 1024);
 	packet->m_body = (char*)packet + RTMP_HEAD_SIZE;
 	body = (unsigned char*)packet->m_body;
@@ -332,27 +348,32 @@ int SendVideoSpsPps(unsigned char* pps, int pps_len, unsigned char* sps, int sps
 	packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
 	packet->m_nInfoField2 = m_pRtmp->m_stream_id;
 
-	/*µ÷ÓÃ·¢ËÍ½Ó¿Ú*/
+	/*ï¿½ï¿½ï¿½Ã·ï¿½ï¿½Í½Ó¿ï¿½*/
 	int nRet = RTMP_SendPacket(m_pRtmp, packet, TRUE);
-	free(packet);    //ÊÍ·ÅÄÚ´æ
+	free(packet);    //ï¿½Í·ï¿½ï¿½Ú´ï¿½
 	return nRet;
 }
 
 /**
- * ·¢ËÍH264Êý¾ÝÖ¡
+ * ï¿½ï¿½ï¿½ï¿½H264ï¿½ï¿½ï¿½ï¿½Ö¡
  *
- * @param data ´æ´¢Êý¾ÝÖ¡ÄÚÈÝ
- * @param size Êý¾ÝÖ¡µÄ´óÐ¡
- * @param bIsKeyFrame ¼ÇÂ¼¸ÃÖ¡ÊÇ·ñÎª¹Ø¼üÖ¡
- * @param nTimeStamp µ±Ç°Ö¡µÄÊ±¼ä´Á
+ * @param data ï¿½æ´¢ï¿½ï¿½ï¿½ï¿½Ö¡ï¿½ï¿½ï¿½ï¿½
+ * @param size ï¿½ï¿½ï¿½ï¿½Ö¡ï¿½Ä´ï¿½Ð¡
+ * @param bIsKeyFrame ï¿½ï¿½Â¼ï¿½ï¿½Ö¡ï¿½Ç·ï¿½Îªï¿½Ø¼ï¿½Ö¡
+ * @param nTimeStamp ï¿½ï¿½Ç°Ö¡ï¿½ï¿½Ê±ï¿½ï¿½ï¿½
  *
- * @³É¹¦Ôò·µ»Ø 1 , Ê§°ÜÔò·µ»Ø0
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½ 1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int SendH264Packet(unsigned char* data, unsigned int size, int bIsKeyFrame, unsigned int nTimeStamp)
 {
 	if (data == NULL && size < 11) {
 		return false;
 	}
+
+	static int packet_count = 0;
+	char label[64];
+	sprintf(label, "Video Packet #%d (%s)", ++packet_count, bIsKeyFrame ? "Keyframe" : "P-frame");
+	PrintHexData(label, data, size, 48);
 
 	unsigned char* body = (unsigned char*)malloc(size + 9);
 	memset(body, 0, size + 9);
@@ -401,15 +422,15 @@ int SendH264Packet(unsigned char* data, unsigned int size, int bIsKeyFrame, unsi
 }
 
 /**
- * ´ÓÄÚ´æÖÐ¶ÁÈ¡³öµÚÒ»¸öNalµ¥Ôª
+ * ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ð¶ï¿½È¡ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½Nalï¿½ï¿½Ôª
  *
- * @param nalu ´æ´¢naluÊý¾Ý
- * @param read_buffer »Øµ÷º¯Êý£¬µ±Êý¾Ý²»×ãµÄÊ±ºò£¬ÏµÍ³»á×Ô¶¯µ÷ÓÃ¸Ãº¯Êý»ñÈ¡ÊäÈëÊý¾Ý¡£
- *					2¸ö²ÎÊý¹¦ÄÜ£º
- *					uint8_t *buf£ºÍâ²¿Êý¾ÝËÍÖÁ¸ÃµØÖ·
- *					int buf_size£ºÍâ²¿Êý¾Ý´óÐ¡
- *					·µ»ØÖµ£º³É¹¦¶ÁÈ¡µÄÄÚ´æ´óÐ¡
- * @³É¹¦Ôò·µ»Ø 1 , Ê§°ÜÔò·µ»Ø0
+ * @param nalu ï¿½æ´¢naluï¿½ï¿½ï¿½ï¿½
+ * @param read_buffer ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý²ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ÏµÍ³ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½Ã¸Ãºï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¡ï¿½
+ *					2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü£ï¿½
+ *					uint8_t *bufï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½Ö·
+ *					int buf_sizeï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½Ý´ï¿½Ð¡
+ *					ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ð¡
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½ 1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int ReadFirstNaluFromBuf(NaluUnit& nalu, int (*read_buffer)(uint8_t* buf, int buf_size))
 {
@@ -473,22 +494,22 @@ int ReadFirstNaluFromBuf(NaluUnit& nalu, int (*read_buffer)(uint8_t* buf, int bu
 }
 
 /**
- * ´ÓÄÚ´æÖÐ¶ÁÈ¡³öÒ»¸öNalµ¥Ôª
+ * ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ð¶ï¿½È¡ï¿½ï¿½Ò»ï¿½ï¿½Nalï¿½ï¿½Ôª
  *
- * @param nalu ´æ´¢naluÊý¾Ý
- * @param read_buffer »Øµ÷º¯Êý£¬µ±Êý¾Ý²»×ãµÄÊ±ºò£¬ÏµÍ³»á×Ô¶¯µ÷ÓÃ¸Ãº¯Êý»ñÈ¡ÊäÈëÊý¾Ý¡£
- *					2¸ö²ÎÊý¹¦ÄÜ£º
- *					uint8_t *buf£ºÍâ²¿Êý¾ÝËÍÖÁ¸ÃµØÖ·
- *					int buf_size£ºÍâ²¿Êý¾Ý´óÐ¡
- *					·µ»ØÖµ£º³É¹¦¶ÁÈ¡µÄÄÚ´æ´óÐ¡
- * @³É¹¦Ôò·µ»Ø 1 , Ê§°ÜÔò·µ»Ø0
+ * @param nalu ï¿½æ´¢naluï¿½ï¿½ï¿½ï¿½
+ * @param read_buffer ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý²ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ÏµÍ³ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½Ã¸Ãºï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¡ï¿½
+ *					2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü£ï¿½
+ *					uint8_t *bufï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½Ö·
+ *					int buf_sizeï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½Ý´ï¿½Ð¡
+ *					ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ð¡
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½ 1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int ReadOneNaluFromBuf(NaluUnit& nalu, int (*read_buffer)(uint8_t* buf, int buf_size))
 {
 
 	int naltail_pos = nalhead_pos;
 	int ret;
-	int nalustart;//nalµÄ¿ªÊ¼±êÊ¶·ûÊÇ¼¸¸ö00
+	int nalustart;//nalï¿½Ä¿ï¿½Ê¼ï¿½ï¿½Ê¶ï¿½ï¿½ï¿½Ç¼ï¿½ï¿½ï¿½00
 	memset(m_pFileBuf_tmp, 0, BUFFER_SIZE);
 	nalu.size = 0;
 	while (1)
@@ -609,14 +630,14 @@ int ReadOneNaluFromBuf(NaluUnit& nalu, int (*read_buffer)(uint8_t* buf, int buf_
 }
 
 /**
- * ½«ÄÚ´æÖÐµÄÒ»¶ÎH.264±àÂëµÄÊÓÆµÊý¾ÝÀûÓÃRTMPÐ­Òé·¢ËÍµ½·þÎñÆ÷
+ * ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ðµï¿½Ò»ï¿½ï¿½H.264ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½RTMPÐ­ï¿½é·¢ï¿½Íµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  *
- * @param read_buffer »Øµ÷º¯Êý£¬µ±Êý¾Ý²»×ãµÄÊ±ºò£¬ÏµÍ³»á×Ô¶¯µ÷ÓÃ¸Ãº¯Êý»ñÈ¡ÊäÈëÊý¾Ý¡£
- *					2¸ö²ÎÊý¹¦ÄÜ£º
- *					uint8_t *buf£ºÍâ²¿Êý¾ÝËÍÖÁ¸ÃµØÖ·
- *					int buf_size£ºÍâ²¿Êý¾Ý´óÐ¡
- *					·µ»ØÖµ£º³É¹¦¶ÁÈ¡µÄÄÚ´æ´óÐ¡
- * @³É¹¦Ôò·µ»Ø1 , Ê§°ÜÔò·µ»Ø0
+ * @param read_buffer ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý²ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ÏµÍ³ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½Ã¸Ãºï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¡ï¿½
+ *					2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ü£ï¿½
+ *					uint8_t *bufï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½Ö·
+ *					int buf_sizeï¿½ï¿½ï¿½â²¿ï¿½ï¿½ï¿½Ý´ï¿½Ð¡
+ *					ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ú´ï¿½ï¿½Ð¡
+ * @ï¿½É¹ï¿½ï¿½ò·µ»ï¿½1 , Ê§ï¿½ï¿½ï¿½ò·µ»ï¿½0
  */
 int RTMP264_Send(int (*read_buffer)(unsigned char* buf, int buf_size))
 {
@@ -631,21 +652,23 @@ int RTMP264_Send(int (*read_buffer)(unsigned char* buf, int buf_size))
 	}
 
 	NaluUnit naluUnit;
-	// ¶ÁÈ¡SPSÖ¡   
+	// èŽ·å–SPSå¸§   
 	ReadFirstNaluFromBuf(naluUnit, read_buffer);
 	metaData.nSpsLen = naluUnit.size;
 	metaData.Sps = NULL;
 	metaData.Sps = (unsigned char*)malloc(naluUnit.size);
 	memcpy(metaData.Sps, naluUnit.data, naluUnit.size);
+	PrintHexData("SPS (Sequence Parameter Set)", metaData.Sps, metaData.nSpsLen);
 
-	// ¶ÁÈ¡PPSÖ¡   
+	// èŽ·å–PPSå¸§   
 	ReadOneNaluFromBuf(naluUnit, read_buffer);
 	metaData.nPpsLen = naluUnit.size;
 	metaData.Pps = NULL;
 	metaData.Pps = (unsigned char*)malloc(naluUnit.size);
 	memcpy(metaData.Pps, naluUnit.data, naluUnit.size);
+	PrintHexData("PPS (Picture Parameter Set)", metaData.Pps, metaData.nPpsLen);
 
-	// ½âÂëSPS,»ñÈ¡ÊÓÆµÍ¼Ïñ¿í¡¢¸ßÐÅÏ¢   
+	// ï¿½ï¿½ï¿½ï¿½SPS,ï¿½ï¿½È¡ï¿½ï¿½ÆµÍ¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢   
 	int width = 0, height = 0, fps = 0;
 	h264_decode_sps(metaData.Sps, metaData.nSpsLen, width, height, fps);
 	//metaData.nWidth = width;  
@@ -655,7 +678,7 @@ int RTMP264_Send(int (*read_buffer)(unsigned char* buf, int buf_size))
 	else
 		metaData.nFrameRate = 25;
 
-	//·¢ËÍPPS,SPS
+	//ï¿½ï¿½ï¿½ï¿½PPS,SPS
 	//ret=SendVideoSpsPps(metaData.Pps,metaData.nPpsLen,metaData.Sps,metaData.nSpsLen);
 	//if(ret!=1)
 	//	return FALSE;
